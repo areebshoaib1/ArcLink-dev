@@ -1,38 +1,55 @@
-#ArcLink
+# ArcLink
 
+**Instant USDC payment links built on Arc.**
 
+ArcLink makes it easy to create and share payment links for seamless USDC payments on the Arc blockchain.
 
-Instant USDC payment links built on Arc.
+## Getting Started
 
+### Prerequisites
 
+Make sure you have [Bun](https://bun.sh/) installed before getting started.
 
-Design and concept: \[ArcLink-payment-links](https://github.com/areebshoaib1/ArcLink-payment-links)
+### Installation
 
+1. **Clone the repository**
 
+   ```bash
+   git clone <repository-url>
+   cd ArcLink
+   ```
 
-\## Setup
+2. **Install dependencies**
 
+   ```bash
+   bun install
+   ```
 
+3. **Configure environment variables**
 
-1\. Install dependencies: `bun install`
+   Copy the example environment file:
 
-2\. Copy `.env.example` to `.env` and fill in the values
+   ```bash
+   cp .env.example .env
+   ```
 
-3\. Start the dev server: `bun run dev`
+   Open `.env` and configure the required environment variables.
 
+4. **Start the development server**
 
+   ```bash
+   bun run dev
+   ```
 
-\## Stack
+   Follow the URL printed in your terminal to open the application.
 
+## Tech Stack
 
+- **Vite**: Development server and build tooling
+- **Tailwind CSS**: Utility-first styling
+- **Foundry**: Solidity smart contract development and testing
+- **Bun**: JavaScript runtime and package manager
 
-Vite, Tailwind CSS, Foundry (Solidity contracts), Bun
-
-
-
-\## License
-
-
+## License
 
 MIT
-

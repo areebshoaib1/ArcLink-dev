@@ -1,0 +1,197 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Brand */
+  --navy:           #1e3a5f;
+  --navy-dark:      #162e4d;
+  --navy-hover:     #243f66;
+
+  /* Surfaces */
+  --bg:             #ffffff;
+  --blue-card:      #eef3fc;
+  --blue-card-border: #d8e6f9;
+  --surface-muted:  #f7f9fc;
+
+  /* Text */
+  --text-primary:   #0f172a;
+  --text-secondary: #64748b;
+  --text-muted:     #94a3b8;
+
+  /* Borders */
+  --border:         #e2e8f0;
+  --border-input:   #cbd5e1;
+
+  /* Status — only used for payment state */
+  --paid-text:      #16a34a;
+  --paid-bg:        #dcfce7;
+  --pending-text:   #b45309;
+  --pending-bg:     #fef3c7;
+
+  /* Semantic */
+  --danger:         #dc2626;
+  --success-circle: #22c55e;
+
+  /* Layout */
+  --px:             24px;
+  --radius:         16px;
+  --radius-lg:      20px;
+  --radius-btn:     14px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  min-height: 100dvh;
+  background: #f1f5f9;  /* outer frame bg on desktop */
+}
+
+/* All text: Inter */
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Monetary amounts: serif signature */
+.amount {
+  font-family: Georgia, 'Times New Roman', serif;
+  letter-spacing: -0.01em;
+}
+
+.mono {
+  font-family: 'JetBrains Mono', Menlo, monospace;
+}
+
+
+/* Responsive frame for mobile and desktop */
+.mobile-frame {
+  width: 100%;
+  max-width: 1200px;
+  min-height: 100dvh;
+  background: var(--bg);
+  margin: 0 auto;
+  position: relative;
+  overflow-x: hidden;
+}
+
+
+/* Primary button */
+.btn-primary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 16px;
+  border-radius: var(--radius-btn);
+  background: var(--navy);
+  color: #ffffff;
+  font-family: 'Inter', sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.btn-primary:hover { opacity: 0.92; }
+.btn-primary:active { opacity: 0.82; transform: scale(0.99); }
+.btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Outlined button */
+.btn-outline {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 16px;
+  border-radius: var(--radius-btn);
+  background: transparent;
+  color: var(--navy);
+  font-family: 'Inter', sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  border: 1.5px solid var(--navy);
+  cursor: pointer;
+  transition: background 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.btn-outline:hover { background: var(--surface-muted); }
+.btn-outline:active { background: var(--blue-card); }
+
+/* Input field */
+.input-field {
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  border: 1.5px solid var(--border-input);
+  font-family: 'Inter', sans-serif;
+  font-size: 15px;
+  color: var(--text-primary);
+  background: var(--bg);
+  outline: none;
+  transition: border-color 0.15s;
+}
+.input-field::placeholder { color: var(--text-muted); }
+.input-field:focus { border-color: var(--navy); }
+
+/* Card surface */
+.card-blue {
+  background: var(--blue-card);
+  border: 1px solid var(--blue-card-border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+}
+
+/* Status badges */
+.badge-paid {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 99px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--paid-bg);
+  color: var(--paid-text);
+}
+.badge-pending {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 99px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--pending-bg);
+  color: var(--pending-text);
+}
+
+/* Typing cursor blink */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+.cursor-blink {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  background: var(--text-primary);
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  animation: blink 0.9s step-end infinite;
+}
+
+/* Screen slide transitions */
+@keyframes slideInRight {
+  from { transform: translateX(100%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+@keyframes slideInLeft {
+  from { transform: translateX(-100%); opacity: 0; }
+  to   { transform: translateX(0);     opacity: 1; }
+}
+.slide-in-right { animation: slideInRight 0.28s cubic-bezier(0.32, 0, 0.67, 0) both; }
+.slide-in-left  { animation: slideInLeft  0.28s cubic-bezier(0.32, 0, 0.67, 0) both; }

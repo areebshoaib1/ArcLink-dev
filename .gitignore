@@ -11,3 +11,5 @@ mintty*.png
 dist
 out
 cache
+*.wallet-backup
+*.before-*

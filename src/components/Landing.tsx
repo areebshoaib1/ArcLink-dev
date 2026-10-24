@@ -3,6 +3,7 @@ import { Zap, Globe, DollarSign } from 'lucide-react';
 import { ConnectKitButton } from 'connectkit';
 import { useAccount } from 'wagmi';
 import { ArcLogoMark } from './ArcLogo';
+import { useSession } from '../auth';
 import type { AppView } from '../types';
 
 const FULL_TEXT = 'Get paid in USDC instantly';
@@ -14,6 +15,7 @@ interface Props {
 
 export default function Landing({ onNavigate }: Props) {
   const { address, isConnected } = useAccount();
+  const { signedIn, signIn, signing, error: signError } = useSession();
   const [displayed, setDisplayed] = useState('');
   const [done, setDone] = useState(false);
 
@@ -34,9 +36,19 @@ export default function Landing({ onNavigate }: Props) {
     return () => clearInterval(id);
   }, []);
 
-  function handleCreateLink() {
-    if (!walletReady) return;
-    onNavigate({ name: 'create' });
+  // A connected wallet is not enough: the user must also sign the free
+  // sign-in message. The server checks that signature on private requests.
+  async function ensureSignedIn(): Promise<boolean> {
+    if (!walletReady) return false;
+    return signedIn || (await signIn());
+  }
+
+  async function handleCreateLink() {
+    if (await ensureSignedIn()) onNavigate({ name: 'create' });
+  }
+
+  async function handleDashboard() {
+    if (await ensureSignedIn()) onNavigate({ name: 'dashboard' });
   }
 
   return (
@@ -105,16 +117,18 @@ export default function Landing({ onNavigate }: Props) {
           )}
         </ConnectKitButton.Custom>
 
+        {signing && (
+          <p className="text-center text-xs" style={{ color: 'var(--text-muted)' }}>
+            Confirm in your wallet…
+          </p>
+        )}
+
         <button
           type="button"
           className="btn-primary flex items-center justify-center gap-2"
-          onClick={handleCreateLink}
-          disabled={!walletReady}
-          style={
-            !walletReady
-              ? { opacity: 0.45, cursor: 'not-allowed' }
-              : undefined
-          }
+          onClick={() => { void handleCreateLink(); }}
+          disabled={!walletReady || signing}
+          style={!walletReady || signing ? { opacity: 0.45, cursor: 'not-allowed' } : undefined}
         >
           Create payment link
         </button>
@@ -122,17 +136,9 @@ export default function Landing({ onNavigate }: Props) {
         <button
           type="button"
           className="btn-outline"
-          onClick={() => {
-            if (walletReady) {
-              onNavigate({ name: 'dashboard' });
-            }
-          }}
-          disabled={!walletReady}
-          style={
-            !walletReady
-              ? { opacity: 0.45, cursor: 'not-allowed' }
-              : undefined
-          }
+          onClick={() => { void handleDashboard(); }}
+          disabled={!walletReady || signing}
+          style={!walletReady || signing ? { opacity: 0.45, cursor: 'not-allowed' } : undefined}
         >
           View my dashboard
         </button>
@@ -141,9 +147,12 @@ export default function Landing({ onNavigate }: Props) {
           className="text-center text-xs"
           style={{ color: 'var(--text-muted)' }}
         >
-          {walletReady
-            ? 'Your wallet is connected.'
-            : 'Connect your wallet to create payment links and access your dashboard.'}
+          {signError ??
+            (walletReady
+              ? signedIn
+                ? 'Wallet connected and signed in.'
+                : 'Wallet connected. You will be asked to sign a free message to continue.'
+              : 'Connect your wallet to create payment links and access your dashboard.')}
         </p>
       </div>
 

@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import { useAccount, useReadContract } from 'wagmi';
 import { erc20Abi } from 'viem';
@@ -6,7 +7,8 @@ import { loadSentPayments } from '../storage';
 import { buildPayUrl, formatAddress, formatDate } from '../utils';
 import { buildTxExplorerUrl, getUsdc } from '@/onchain-facts';
 import { Amount, usdcDecimalsFor } from '@/onchain-money';
-import { apiGetLinksByAddress, type ApiLink } from '../api';
+import { apiGetLinksByAddress, apiGetCreator, AuthRequiredError, type ApiLink } from '../api';
+import { useSession } from '../auth';
 import { ARC_ACTIVE_CHAIN_ID, ACTIVE_CHAIN_NAME } from '../config';
 import type { AppView, SentPayment, LinkParams } from '../types';
 
@@ -21,9 +23,10 @@ const USDC_ADDRESS = usdcFact.address as `0x${string}`;
 
 export default function Dashboard({ onNavigate }: Props) {
   const { address, isConnected } = useAccount();
+  const { signedIn, signIn, signOut, signing, error: signError } = useSession();
   const [tab, setTab] = useState<Tab>('received');
   const [links, setLinks] = useState<ApiLink[]>([]);
-  const [sent, setSent] = useState<SentPayment[]>(() => loadSentPayments());
+  const [sent, setSent] = useState<SentPayment[]>(() => loadSentPayments(address));
   const [loading, setLoading] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -49,32 +52,37 @@ export default function Dashboard({ onNavigate }: Props) {
     setFetchError(null);
     apiGetLinksByAddress(addr)
       .then((data) => { setLinks(data); })
-      .catch(() => { setFetchError('Could not load links from server. Showing local data.'); })
+      .catch((e: unknown) => {
+        // Server rejected our sign-in (expired / wrong wallet) — go back to the sign-in screen
+        if (e instanceof AuthRequiredError) { signOut(); return; }
+        setFetchError('Could not load links from server. Showing local data.');
+      })
       .finally(() => { setLoading(false); });
-  }, []);
+  }, [signOut]);
 
   // Wrap for use in focus/interval handlers that read address from closure
   const fetchLinks = useCallback(() => {
-    if (address) doFetch(address);
-  }, [address, doFetch]);
+    if (address && signedIn) doFetch(address);
+  }, [address, signedIn, doFetch]);
 
   // Fetch when address becomes available or changes
   useEffect(() => {
-    if (address) doFetch(address);
-  // doFetch is stable; address change is the intended trigger
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [address]);
-
+    if (address && signedIn) doFetch(address);
+    setSent(loadSentPayments(address));
+    // doFetch is stable; address / sign-in change is the intended trigger
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [address, signedIn]);
   // Refresh on tab focus (catches payments made on another device/browser)
   useEffect(() => {
     const onFocus = () => {
       fetchLinks();
       void refetchBalance();
-      setSent(loadSentPayments());
+      setSent(loadSentPayments(address));
     };
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);
-  }, [fetchLinks, refetchBalance]);
+  }, [fetchLinks, refetchBalance, address]);
+
 
   // Poll every 15 s while the dashboard is open — catches cross-device payments quickly
   useEffect(() => {
@@ -107,11 +115,45 @@ export default function Dashboard({ onNavigate }: Props) {
   function handleRefresh() {
     void fetchLinks();
     void refetchBalance();
-    setSent(loadSentPayments());
-  }
+    setSent(loadSentPayments(address));
 
+  }
+  // ── Gate: needs a connected wallet AND a verified sign-in ───────────────────
+  // (The server also refuses to send links without a valid signature, so this
+  //  screen is a convenience — the real protection is server/auth.ts.)
+  if (!isConnected || !signedIn) {
+    return (
+      <div className="mobile-frame flex flex-col" style={{ paddingLeft: 'var(--px)', paddingRight: 'var(--px)' }}>
+        <div className="flex flex-1 flex-col items-center justify-center text-center">
+          <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
+            Sign in to view your dashboard
+          </h1>
+          <p className="mt-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
+            {isConnected
+              ? 'Sign a free message to prove this wallet is yours. No transaction, no gas.'
+              : 'Connect your wallet from the home screen first.'}
+          </p>
+          {signError && (
+            <p className="mt-3 text-xs" style={{ color: '#c2410c' }}>{signError}</p>
+          )}
+          <div className="mt-6 w-full space-y-3">
+            {isConnected && (
+              <button className="btn-primary" onClick={() => { void signIn(); }} disabled={signing}>
+                {signing ? 'Confirm in your wallet…' : 'Sign in'}
+              </button>
+            )}
+            <button className="btn-outline" onClick={() => onNavigate({ name: 'landing' })}>
+              Back to home
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
   return (
+
     <div className="mobile-frame flex flex-col" style={{ paddingLeft: 'var(--px)', paddingRight: 'var(--px)' }}>
+
       {/* Header */}
       <div className="flex items-start justify-between pt-12 pb-4">
         <div>
@@ -182,25 +224,25 @@ export default function Dashboard({ onNavigate }: Props) {
         </div>
       )}
 
-     
-{/* Stats row — only count verified payments */}
-<div className="grid grid-cols-3 gap-2.5 mb-5">
-  <StatCard
-    label="Total received"
-    value={`$${totalReceived.toLocaleString('en-US', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })}`}
-  />
-  <StatCard
-    label="Pending"
-    value={`$${totalPending.toLocaleString('en-US', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })}`}
-  />
-  <StatCard label="Links created" value={String(links.length)} />
-</div>
+
+      {/* Stats row — only count verified payments */}
+      <div className="grid grid-cols-3 gap-2.5 mb-5">
+        <StatCard
+          label="Total received"
+          value={`$${totalReceived.toLocaleString('en-US', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })}`}
+        />
+        <StatCard
+          label="Pending"
+          value={`$${totalPending.toLocaleString('en-US', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })}`}
+        />
+        <StatCard label="Links created" value={String(links.length)} />
+      </div>
 
 
       {/* Tabs */}
@@ -285,7 +327,7 @@ function StatCard({ label, value }: { label: string; value: string }) {
       className="rounded-2xl p-3"
       style={{ background: 'var(--blue-card)', border: '1px solid var(--blue-card-border)' }}
     >
-     <p className="text-xs leading-snug whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>{label}</p>
+      <p className="text-xs leading-snug whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>{label}</p>
       <p className="amount mt-1.5 text-xl font-bold tabular-nums leading-none" style={{ color: 'var(--navy)' }}>
         {value}
       </p>
@@ -317,7 +359,10 @@ function ReceivedRow({
             {link.description || 'Payment'}
           </p>
           <p className="mt-0.5 truncate text-xs" style={{ color: 'var(--text-secondary)' }}>
-            {link.clientName || 'No client name'}
+            {link.clientName ? `${link.clientName} · ` : ''}
+            {isPaid
+              ? (link.paidBy ? `Paid by ${formatAddress(link.paidBy)}` : 'Paid')
+              : 'Waiting for payment'}
             {!isPaid && copied && (
               <span className="ml-2 font-semibold" style={{ color: 'var(--navy)' }}>Link copied!</span>
             )}
@@ -340,6 +385,15 @@ function ReceivedRow({
 }
 
 function SentRow({ payment }: { payment: SentPayment }) {
+  // Show the recipient's display name when they have set one, else their short address.
+  const [recipientName, setRecipientName] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    apiGetCreator(payment.to)
+      .then((c) => { if (!cancelled) setRecipientName(c.displayName); })
+      .catch(() => { /* offline — the address is enough */ });
+    return () => { cancelled = true; };
+  }, [payment.to]);
   return (
     <div className="rounded-2xl p-4" style={{ background: '#fff', border: '1px solid var(--border)' }}>
       <div className="flex items-start justify-between gap-3">
@@ -348,7 +402,7 @@ function SentRow({ payment }: { payment: SentPayment }) {
             {payment.description || 'Payment'}
           </p>
           <p className="mt-0.5 truncate text-xs" style={{ color: 'var(--text-secondary)' }}>
-            To {payment.clientName || formatAddress(payment.to)}
+            To {recipientName ? `${recipientName} (${formatAddress(payment.to)})` : formatAddress(payment.to)}
           </p>
           <p className="mt-0.5 text-xs" style={{ color: 'var(--text-muted)' }}>
             {formatDate(payment.paidAt)}

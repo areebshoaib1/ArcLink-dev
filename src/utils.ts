@@ -50,7 +50,7 @@ export function buildPayUrl(params: LinkParams): string {
     a: params.amount,
     d: params.description ?? '',
     r: params.to,
-    n: params.clientName ?? '',
+    n: '', // client name is private to the creator — never put it in a shareable URL
     id: params.linkId,
   });
   return `${base}#?${p.toString()}`;

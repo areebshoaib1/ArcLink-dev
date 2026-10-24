@@ -11,7 +11,7 @@ import { ConnectKitButton } from 'connectkit';
 import { erc20Abi, decodeEventLog, parseAbiItem } from 'viem';
 import { Loader2, X, AlertCircle, CheckCircle2, ExternalLink } from 'lucide-react';
 import { markLinkPaid, addSentPayment } from '../storage';
-import { apiGetLink, apiMarkPaid, DuplicatePaymentError } from '../api';
+import { apiGetLink, apiMarkPaid, apiGetCreator, DuplicatePaymentError } from '../api';
 import type { ApiLink } from '../api';
 import { parseOnchainError, formatAddress, buildPayUrl, formatDate } from '../utils';
 import { getUsdc, requireChain, buildTxExplorerUrl } from '@/onchain-facts';
@@ -46,6 +46,18 @@ export default function PayLink({ params, onNavigate }: Props) {
   // ── Link status (loaded from backend on mount) ────────────────────────────
   const [linkStatus, setLinkStatus] = useState<LinkStatus>({ kind: 'loading' });
 
+  // ── Creator display name (looked up by recipient address) ───────────────────
+  // Never taken from the URL: the URL's clientName is the intended PAYER, not the creator.
+  const [creatorName, setCreatorName] = useState<string | null>(null);
+
+  useEffect(() => {
+    apiGetCreator(params.to)
+      .then((c) => { if (c.displayName) setCreatorName(c.displayName); })
+      .catch(() => { /* backend unreachable — leave null */ });
+    // params.to is stable for the lifetime of this component
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Load status once on mount — and expose a re-check function for pre-send guard
   async function checkLinkStatus(): Promise<'pending' | 'paid'> {
     try {
@@ -73,8 +85,8 @@ export default function PayLink({ params, onNavigate }: Props) {
 
   useEffect(() => {
     void checkLinkStatus();
-  // Only run on mount — params.linkId is stable for the lifetime of this component
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Only run on mount — params.linkId is stable for the lifetime of this component
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── Payment state ─────────────────────────────────────────────────────────
@@ -158,19 +170,20 @@ export default function PayLink({ params, onNavigate }: Props) {
         // Backend error: local cache still updated below
       });
 
-    markLinkPaid(params.linkId, hash, address);
+    markLinkPaid(params.linkId, hash, address, params.to);
     if (saveHistory) {
       addSentPayment({
         txHash: hash,
         to: params.to,
         amount: params.amount,
         description: params.description,
-        clientName: params.clientName,
+        clientName: '',
         paidAt: Date.now(),
-      });
+      }, address);
     }
+
     onNavigate({ name: 'receipt', params, txHash: hash, paidBy: address });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [receiptArrived, receipt]);
 
   const arcChain = requireChain(ARC_ACTIVE_CHAIN_ID);
@@ -274,7 +287,7 @@ export default function PayLink({ params, onNavigate }: Props) {
 
   // ── Loading state (checking status on mount) ──────────────────────────────
   const statusLoading = linkStatus.kind === 'loading';
-  const statusWarn    = linkStatus.kind === 'unknown' ? linkStatus.warn : null;
+  const statusWarn = linkStatus.kind === 'unknown' ? linkStatus.warn : null;
 
   // ── Normal pay flow ───────────────────────────────────────────────────────
   return (
@@ -304,8 +317,9 @@ export default function PayLink({ params, onNavigate }: Props) {
         <p className="mb-3 text-sm" style={{ color: 'var(--text-secondary)' }}>
           Payment request from{' '}
           <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>
-            {params.clientName || formatAddress(params.to)}
+            {creatorName ?? formatAddress(params.to)}
           </span>
+
         </p>
         <div className="flex items-center justify-center gap-2">
           <span className="amount text-5xl font-bold tabular-nums"
@@ -340,25 +354,31 @@ export default function PayLink({ params, onNavigate }: Props) {
       </div>
 
       {/* Errors */}
-      {txErrorMsg && (
-        <div className="mb-4 rounded-2xl p-3 text-sm"
-          style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626' }}>
-          {txErrorMsg}
-        </div>
-      )}
-      {verifyError && (
-        <div className="mb-4 flex gap-2 rounded-2xl p-3 text-sm"
-          style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626' }}>
-          <AlertCircle size={16} className="mt-0.5 shrink-0" />
-          <span>{verifyError}</span>
-        </div>
-      )}
-      {insufficientBalance && (
-        <div className="mb-4 rounded-2xl p-3 text-sm"
-          style={{ background: '#fff7ed', border: '1px solid #fed7aa', color: '#c2410c' }}>
-          Insufficient USDC balance ({formattedBalance} USDC). Use "Get test USDC" in the sidebar.
-        </div>
-      )}
+      {
+        txErrorMsg && (
+          <div className="mb-4 rounded-2xl p-3 text-sm"
+            style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626' }}>
+            {txErrorMsg}
+          </div>
+        )
+      }
+      {
+        verifyError && (
+          <div className="mb-4 flex gap-2 rounded-2xl p-3 text-sm"
+            style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626' }}>
+            <AlertCircle size={16} className="mt-0.5 shrink-0" />
+            <span>{verifyError}</span>
+          </div>
+        )
+      }
+      {
+        insufficientBalance && (
+          <div className="mb-4 rounded-2xl p-3 text-sm"
+            style={{ background: '#fff7ed', border: '1px solid #fed7aa', color: '#c2410c' }}>
+            Insufficient USDC balance ({formattedBalance} USDC). Use "Get test USDC" in the sidebar.
+          </div>
+        )
+      }
 
       {/* CTA area */}
       <div className="space-y-3">
@@ -374,8 +394,8 @@ export default function PayLink({ params, onNavigate }: Props) {
           <p className="text-center text-xs" style={{ color: 'var(--text-muted)' }}>
             {formattedBalance != null
               ? <>Balance: <span className="font-semibold"
-                  style={{ color: insufficientBalance ? '#c2410c' : 'var(--text-secondary)' }}>
-                  {formattedBalance} USDC</span></>
+                style={{ color: insufficientBalance ? '#c2410c' : 'var(--text-secondary)' }}>
+                {formattedBalance} USDC</span></>
               : 'Checking balance…'}
           </p>
         )}
@@ -419,10 +439,10 @@ export default function PayLink({ params, onNavigate }: Props) {
             {statusLoading
               ? 'Checking status…'
               : isPending
-              ? 'Confirm in wallet…'
-              : isConfirming
-              ? 'Confirming…'
-              : `Pay $${params.amount} USDC`}
+                ? 'Confirm in wallet…'
+                : isConfirming
+                  ? 'Confirming…'
+                  : `Pay $${params.amount} USDC`}
           </button>
         )}
       </div>
@@ -444,69 +464,71 @@ export default function PayLink({ params, onNavigate }: Props) {
       </div>
 
       {/* Confirmation modal */}
-      {showConfirm && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center"
-          style={{ background: 'rgba(0,0,0,0.45)' }}
-          onClick={() => setShowConfirm(false)}>
-          <div className="w-full rounded-t-3xl bg-white p-6 pb-10" style={{ maxWidth: 375 }}
-            onClick={(e) => e.stopPropagation()}>
-            <div className="mb-5 flex items-center justify-between">
-              <h2 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>
-                Confirm payment
-              </h2>
-              <button onClick={() => setShowConfirm(false)}
-                className="flex size-8 items-center justify-center rounded-full"
-                style={{ background: '#f1f5f9' }}>
-                <X size={16} style={{ color: 'var(--text-secondary)' }} />
-              </button>
-            </div>
+      {
+        showConfirm && (
+          <div className="fixed inset-0 z-50 flex items-end justify-center"
+            style={{ background: 'rgba(0,0,0,0.45)' }}
+            onClick={() => setShowConfirm(false)}>
+            <div className="w-full rounded-t-3xl bg-white p-6 pb-10" style={{ maxWidth: 375 }}
+              onClick={(e) => e.stopPropagation()}>
+              <div className="mb-5 flex items-center justify-between">
+                <h2 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>
+                  Confirm payment
+                </h2>
+                <button onClick={() => setShowConfirm(false)}
+                  className="flex size-8 items-center justify-center rounded-full"
+                  style={{ background: '#f1f5f9' }}>
+                  <X size={16} style={{ color: 'var(--text-secondary)' }} />
+                </button>
+              </div>
 
-            <div className="space-y-3 rounded-2xl p-4"
-              style={{ background: 'var(--surface-blue)', border: '1px solid var(--border-blue)' }}>
-              <Row label="You pay">
-                <span className="amount font-bold tabular-nums" style={{ color: 'var(--navy)', fontSize: 18 }}>
-                  ${params.amount} USDC
-                </span>
-              </Row>
-              {params.description && <Row label="For">{params.description}</Row>}
-              <Row label="Recipient">
-                <span className="mono" style={{ color: 'var(--text-secondary)' }}>
-                  {formatAddress(params.to)}
-                </span>
-              </Row>
-              {params.clientName && <Row label="Client">{params.clientName}</Row>}
-              <Row label="Token">USDC · {USDC_ADDRESS.slice(0, 6)}…{USDC_ADDRESS.slice(-4)}</Row>
-              <Row label="Network">
-                <span style={{ color: 'var(--navy)', fontWeight: 600 }}>{arcChain.name}</span>
-              </Row>
-              <Row label="Network fee">
-                <span style={{ color: '#16a34a', fontWeight: 600 }}>~$0.00 USDC</span>
-              </Row>
-              {formattedBalance != null && (
-                <Row label="Your balance">
-                  <span style={{ color: insufficientBalance ? '#c2410c' : 'var(--text-secondary)', fontWeight: 500 }}>
-                    {formattedBalance} USDC
+              <div className="space-y-3 rounded-2xl p-4"
+                style={{ background: 'var(--surface-blue)', border: '1px solid var(--border-blue)' }}>
+                <Row label="You pay">
+                  <span className="amount font-bold tabular-nums" style={{ color: 'var(--navy)', fontSize: 18 }}>
+                    ${params.amount} USDC
                   </span>
                 </Row>
-              )}
-            </div>
+                {params.description && <Row label="For">{params.description}</Row>}
+                <Row label="Recipient">
+                  <span className="mono" style={{ color: 'var(--text-secondary)' }}>
+                    {formatAddress(params.to)}
+                  </span>
+                </Row>
 
-            <p className="mt-3 text-xs text-center" style={{ color: 'var(--text-muted)' }}>
-              Funds go directly to the recipient. ArcLink never holds your money.
-            </p>
+                <Row label="Token">USDC · {USDC_ADDRESS.slice(0, 6)}…{USDC_ADDRESS.slice(-4)}</Row>
+                <Row label="Network">
+                  <span style={{ color: 'var(--navy)', fontWeight: 600 }}>{arcChain.name}</span>
+                </Row>
+                <Row label="Network fee">
+                  <span style={{ color: '#16a34a', fontWeight: 600 }}>~$0.00 USDC</span>
+                </Row>
+                {formattedBalance != null && (
+                  <Row label="Your balance">
+                    <span style={{ color: insufficientBalance ? '#c2410c' : 'var(--text-secondary)', fontWeight: 500 }}>
+                      {formattedBalance} USDC
+                    </span>
+                  </Row>
+                )}
+              </div>
 
-            <div className="mt-5 space-y-3">
-              <button className="btn-primary" onClick={handleConfirm} disabled={insufficientBalance}>
-                Confirm &amp; pay ${params.amount} USDC
-              </button>
-              <button className="btn-outline" onClick={() => setShowConfirm(false)}>
-                Cancel
-              </button>
+              <p className="mt-3 text-xs text-center" style={{ color: 'var(--text-muted)' }}>
+                Funds go directly to the recipient. ArcLink never holds your money.
+              </p>
+
+              <div className="mt-5 space-y-3">
+                <button className="btn-primary" onClick={handleConfirm} disabled={insufficientBalance}>
+                  Confirm &amp; pay ${params.amount} USDC
+                </button>
+                <button className="btn-outline" onClick={() => setShowConfirm(false)}>
+                  Cancel
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        )
+      }
+    </div >
   );
 }
 

@@ -68,7 +68,7 @@ export default function App() {
         a: next.params.amount,
         d: next.params.description,
         r: next.params.to,
-        n: next.params.clientName,
+        n: '',
         id: next.params.linkId,
       });
       url.hash = `?${p.toString()}`;
@@ -79,7 +79,7 @@ export default function App() {
       url.searchParams.set('a', next.params.amount);
       url.searchParams.set('d', next.params.description);
       url.searchParams.set('r', next.params.to);
-      url.searchParams.set('n', next.params.clientName);
+      
       url.searchParams.set('id', next.params.linkId);
     }
 

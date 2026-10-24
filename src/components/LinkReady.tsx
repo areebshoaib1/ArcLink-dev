@@ -46,10 +46,16 @@ export default function LinkReady({ link, url, onCreateAnother, onDashboard }: P
             Link created!
           </h1>
           <p className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
-            Share this with{' '}
-            <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>
-              {link.clientName}
-            </span>
+            {link.clientName ? (
+              <>
+                Share this link with{' '}
+                <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>
+                  {link.clientName}
+                </span>
+              </>
+            ) : (
+              'Share this link with whoever should pay you'
+            )}
           </p>
         </div>
 

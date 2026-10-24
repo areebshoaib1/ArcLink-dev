@@ -48,6 +48,19 @@ db.run(`
   )
 `);
 
+/**
+ * Creator profiles: wallet address -> display name.
+ * The name is shown to payers; only the wallet owner may change it
+ * (enforced in server/index.ts with a verified wallet signature).
+ */
+db.run(`
+  CREATE TABLE IF NOT EXISTS creators (
+    addr         TEXT    PRIMARY KEY,   -- lowercase 0x address
+    display_name TEXT    NOT NULL,
+    updated_at   INTEGER NOT NULL
+  )
+`);
+
 // ── Prepared statements ───────────────────────────────────────────────────────
 export const stmts = {
   insertLink: db.prepare(`
@@ -67,6 +80,19 @@ export const stmts = {
     SELECT * FROM links WHERE to_addr = $to_addr ORDER BY created_at DESC
   `),
 
+  // ── Creator profile ─────────────────────────────────────────────────────────
+
+  getCreator: db.prepare(`
+    SELECT addr, display_name, updated_at FROM creators WHERE addr = $addr
+  `),
+
+  upsertCreator: db.prepare(`
+    INSERT INTO creators (addr, display_name, updated_at)
+    VALUES ($addr, $display_name, $updated_at)
+    ON CONFLICT(addr) DO UPDATE SET
+      display_name = excluded.display_name,
+      updated_at   = excluded.updated_at
+  `),
   /**
    * Atomic first-writer-wins update.
    * WHERE verified = 0 means a concurrent second call hits 0 rows.

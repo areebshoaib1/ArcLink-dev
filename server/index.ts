@@ -11,12 +11,17 @@
  *                              400: on-chain check failed (receipt, revert, timestamp, amount)
  *                              409: link already paid OR txHash used on another link
  *   GET  /health             — liveness probe
+  *                              PRIVATE: needs X-ArcLink-Auth signed by that same wallet (401 otherwise)
+ *   GET  /creators/:addr     — public display name of a wallet (payers see this)
+ *   PUT  /creators/:addr     — set display name; needs X-ArcLink-Auth signed by that same wallet
  */
 
 import { serve } from 'bun';
 import { db, stmts } from './db';
 import { verifyPayment } from './verify';
 import { ACTIVE_CHAIN_ID } from './chain-facts';
+import { authenticate } from './auth';
+
 
 const PORT = 3001;
 
@@ -33,32 +38,36 @@ function err(msg: string, status = 400): Response {
 
 // ── DB row type ───────────────────────────────────────────────────────────────
 interface DbRow {
-  id:          string;
-  chain_id:    number;
-  to_addr:     string;
-  amount:      string;
+  id: string;
+  chain_id: number;
+  to_addr: string;
+  amount: string;
   description: string;
   client_name: string;
-  created_at:  number;
-  tx_hash:     string | null;
-  paid_by:     string | null;
-  paid_at:     number | null;
-  verified:    number;
+  created_at: number;
+  tx_hash: string | null;
+  paid_by: string | null;
+  paid_at: number | null;
+  verified: number;
+}
+/** What a PAYER (or anyone without the creator's sign-in) may see: the creator's private client label is blanked. */
+function publicLink(row: DbRow) {
+  return { ...dbRowToLink(row), clientName: '' };
 }
 
 function dbRowToLink(row: DbRow) {
   return {
-    id:          row.id,
-    chainId:     row.chain_id,
-    to:          row.to_addr,
-    amount:      row.amount,
+    id: row.id,
+    chainId: row.chain_id,
+    to: row.to_addr,
+    amount: row.amount,
     description: row.description,
-    clientName:  row.client_name,
-    createdAt:   row.created_at,
-    txHash:      row.tx_hash  ?? undefined,
-    paidBy:      row.paid_by  ?? undefined,
-    paidAt:      row.paid_at  ?? undefined,
-    verified:    row.verified === 1,
+    clientName: row.client_name,
+    createdAt: row.created_at,
+    txHash: row.tx_hash ?? undefined,
+    paidBy: row.paid_by ?? undefined,
+    paidAt: row.paid_at ?? undefined,
+    verified: row.verified === 1,
   };
 }
 
@@ -66,16 +75,16 @@ function dbRowToLink(row: DbRow) {
 serve({
   port: PORT,
   async fetch(req) {
-    const url  = new URL(req.url);
+    const url = new URL(req.url);
     const path = url.pathname;
 
     if (req.method === 'OPTIONS') {
       return new Response(null, {
         status: 204,
         headers: {
-          'Access-Control-Allow-Origin':  '*',
-          'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET,POST,PUT,OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, X-ArcLink-Auth',
         },
       });
     }
@@ -101,25 +110,30 @@ serve({
       const resolvedChainId = typeof chainId === 'number' ? chainId : ACTIVE_CHAIN_ID;
 
       stmts.insertLink.run({
-        $id:          id,
-        $chain_id:    resolvedChainId,
-        $to_addr:     to.toLowerCase(),
-        $amount:      amount,
+        $id: id,
+        $chain_id: resolvedChainId,
+        $to_addr: to.toLowerCase(),
+        $amount: amount,
         $description: (typeof description === 'string' ? description : '').slice(0, 200),
-        $client_name: (typeof clientName  === 'string' ? clientName  : '').slice(0, 100),
-        $created_at:  Date.now(),
+        $client_name: (typeof clientName === 'string' ? clientName : '').slice(0, 100),
+        $created_at: Date.now(),
       });
       return json({ ok: true });
     }
 
     // Route helpers — order matters: /links/by/:addr BEFORE /links/:id
     const byAddrMatch = path.match(/^\/links\/by\/([^/]+)$/);
-    const paidMatch   = path.match(/^\/links\/([^/]+)\/paid$/);
+    const paidMatch = path.match(/^\/links\/([^/]+)\/paid$/);
     const singleMatch = path.match(/^\/links\/([^/]+)$/);
 
     // ── GET /links/by/:addr ───────────────────────────────────────────────────
     if (req.method === 'GET' && byAddrMatch) {
       const addr = decodeURIComponent(byAddrMatch[1]).toLowerCase();
+
+      // PRIVATE: only the wallet that owns these links may read them
+      const caller = await authenticate(req);
+      if (!caller || caller !== addr) return err('sign in required', 401);
+
       const rows = stmts.getLinksByRecipient.all({ $to_addr: addr }) as DbRow[];
       return json(rows.map(dbRowToLink));
     }
@@ -142,16 +156,16 @@ serve({
       // 2. Already paid — record duplicate, return 409
       if (link.verified === 1) {
         stmts.recordDuplicate.run({
-          $link_id:     id,
-          $tx_hash:     txHash,
-          $paid_by:     'unknown',
+          $link_id: id,
+          $tx_hash: txHash,
+          $paid_by: 'unknown',
           $recorded_at: Date.now(),
         });
         return json(
           {
-            error:    'already_paid',
-            message:  'This link has already been paid. Duplicate attempt recorded.',
-            original: dbRowToLink(link),
+            error: 'already_paid',
+            message: 'This link has already been paid. Duplicate attempt recorded.',
+            original: publicLink(link),
           },
           409,
         );
@@ -161,8 +175,10 @@ serve({
       const existingByHash = stmts.getLinkByTxHash.get({ $tx_hash: txHash }) as DbRow | undefined;
       if (existingByHash) {
         return json(
-          { error: 'tx_hash_already_used',
-            message: 'This transaction has already been used to verify a different payment link.' },
+          {
+            error: 'tx_hash_already_used',
+            message: 'This transaction has already been used to verify a different payment link.'
+          },
           409,
         );
       }
@@ -191,7 +207,7 @@ serve({
       //    paidBy is from the Transfer log, not the browser.
       try {
         stmts.markPaid.run({
-          $id:      id,
+          $id: id,
           $tx_hash: txHash,
           $paid_by: result.paidBy,
           $paid_at: Date.now(),
@@ -202,9 +218,9 @@ serve({
           const winner = stmts.getLink.get({ $id: id }) as DbRow | undefined;
           return json(
             {
-              error:    'already_paid',
-              message:  'A concurrent payment was recorded first.',
-              original: winner ? dbRowToLink(winner) : undefined,
+              error: 'already_paid',
+              message: 'A concurrent payment was recorded first.',
+              original: winner ? publicLink(winner) : undefined,
             },
             409,
           );
@@ -213,17 +229,50 @@ serve({
       }
 
       const updated = stmts.getLink.get({ $id: id }) as DbRow;
-      return json(dbRowToLink(updated));
+      return json(publicLink(updated));
     }
 
     // ── GET /links/:id ────────────────────────────────────────────────────────
     if (req.method === 'GET' && singleMatch) {
-      const id  = decodeURIComponent(singleMatch[1]);
+      const id = decodeURIComponent(singleMatch[1]);
       const row = stmts.getLink.get({ $id: id }) as DbRow | undefined;
       if (!row) return err('not found', 404);
-      return json(dbRowToLink(row));
+      return json(publicLink(row));
     }
 
+    // ── GET /creators/:addr — public display name (payers need this) ──────────
+    const creatorMatch = path.match(/^\/creators\/([^/]+)$/);
+    if (req.method === 'GET' && creatorMatch) {
+      const addr = decodeURIComponent(creatorMatch[1]).toLowerCase();
+      if (!/^0x[0-9a-f]{40}$/.test(addr)) return err('invalid address');
+      const row = stmts.getCreator.get({ $addr: addr }) as
+        { addr: string; display_name: string; updated_at: number } | undefined;
+      if (!row) return json({ addr, displayName: null });
+      return json({ addr: row.addr, displayName: row.display_name, updatedAt: row.updated_at });
+    }
+
+    // ── PUT /creators/:addr — only the wallet owner may set its name ──────────
+    if (req.method === 'PUT' && creatorMatch) {
+      const addr = decodeURIComponent(creatorMatch[1]).toLowerCase();
+      if (!/^0x[0-9a-f]{40}$/.test(addr)) return err('invalid address');
+
+      const caller = await authenticate(req);
+      if (!caller || caller !== addr) return err('sign in required', 401);
+
+      let body: Record<string, unknown>;
+      try { body = await req.json() as Record<string, unknown>; }
+      catch { return err('Invalid JSON'); }
+
+      const { displayName } = body as { displayName?: unknown };
+      if (typeof displayName !== 'string') return err('displayName (string) required');
+
+      // Sanitise: drop control characters, collapse whitespace, trim, cap at 60 chars
+      const name = displayName.replace(/\p{Cc}/gu, ' ').replace(/\s+/g, ' ').trim().slice(0, 60);
+      if (name.length < 1) return err('displayName must not be empty');
+
+      stmts.upsertCreator.run({ $addr: addr, $display_name: name, $updated_at: Date.now() });
+      return json({ addr, displayName: name });
+    }
     // ── Health ────────────────────────────────────────────────────────────────
     if (path === '/health') return json({ ok: true });
 

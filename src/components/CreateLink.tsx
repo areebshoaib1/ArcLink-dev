@@ -2,8 +2,8 @@ import { useAccount } from 'wagmi';
 import { isAddress } from 'viem';
 import { useState, useEffect } from 'react';
 import { ArrowLeft, Loader2, Pencil } from 'lucide-react';
-import { apiCreateLink, apiGetCreator, apiSetCreator } from '../api';
-import { useSession } from '../auth';
+import { apiCreateLink, apiGetCreator, apiSetCreator, AuthRequiredError } from '../api';
+import { useSession, loadSession } from '../auth';
 import { ArcLogoSmall } from './ArcLogo';
 import { upsertLink } from '../storage';
 import { generateId, buildPayUrl } from '../utils';
@@ -108,8 +108,14 @@ export default function CreateLink({ onNavigate }: Props) {
 
   async function doCreate() {
     // Hard guard: address must be a real non-empty string before we build the URL
-    if (!canCreate || !address || address.length < 10) return;
+        if (!canCreate || !address || address.length < 10) return;
     setSaveError(null);
+    // The server only accepts links from the wallet that will receive the money.
+    // (Reads the saved session directly: state may be stale right after signing in.)
+    if (!loadSession(address) && !(await signIn())) {
+      setSaveError('Please sign the free message to create your link.');
+      return;
+    }
     setSaving(true);
     const id = generateId();
     const recipientAddress = address as string;
@@ -138,7 +144,13 @@ export default function CreateLink({ onNavigate }: Props) {
         clientName: link.clientName,
         chainId: ARC_ACTIVE_CHAIN_ID,
       });
-    } catch {
+        } catch (e) {
+      if (e instanceof AuthRequiredError) {
+        // Not a network problem: the server refused. Don't pretend the link exists.
+        setSaveError('Your sign-in was not accepted. Please try again.');
+        setSaving(false);
+        return;
+      }
       // Backend unavailable — fall back to localStorage only (single-device mode)
       setSaveError('Could not reach server. Link saved locally only — status updates require the same device.');
     }

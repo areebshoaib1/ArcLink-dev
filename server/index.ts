@@ -21,7 +21,7 @@ import { db, stmts } from './db';
 import { verifyPayment } from './verify';
 import { ACTIVE_CHAIN_ID } from './chain-facts';
 import { authenticate } from './auth';
-
+import { rateLimit, clientIp, ruleFor } from './ratelimit';
 
 const PORT = 3001;
 
@@ -74,7 +74,7 @@ function dbRowToLink(row: DbRow) {
 // ── Server ────────────────────────────────────────────────────────────────────
 serve({
   port: PORT,
-  async fetch(req) {
+  async fetch(req, server) {
     const url = new URL(req.url);
     const path = url.pathname;
 
@@ -87,6 +87,22 @@ serve({
           'Access-Control-Allow-Headers': 'Content-Type, X-ArcLink-Auth',
         },
       });
+    }
+
+
+    // ── Rate limit (per visitor address, per kind of request) ─────────────────
+    {
+      const verdict = rateLimit(clientIp(req, server), ruleFor(req.method, path));
+      if (!verdict.ok) {
+        return new Response(JSON.stringify({ error: 'Too many requests. Please slow down and try again shortly.' }), {
+          status: 429,
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+            'Retry-After': String(verdict.retryAfterSec),
+          },
+        });
+      }
     }
 
     // ── POST /links ───────────────────────────────────────────────────────────
@@ -105,6 +121,14 @@ serve({
         return err('id, to, amount must be strings');
       }
       if (!/^0x[0-9a-fA-F]{40}$/.test(to)) return err('to must be a valid EVM address');
+
+      // Only the wallet that will RECEIVE the money may create a link for it
+      const caller = await authenticate(req);
+      if (!caller) return err('Sign in required', 401);
+      if (caller !== to.toLowerCase()) return err('You can only create links for your own wallet', 403);
+
+      // A link id can only be created once; never silently ignore a second attempt
+      if (stmts.getLink.get({ $id: id })) return err('A link with this id already exists', 409);
 
       // chainId from body — fall back to the current active chain
       const resolvedChainId = typeof chainId === 'number' ? chainId : ACTIVE_CHAIN_ID;

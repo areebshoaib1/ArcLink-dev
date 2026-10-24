@@ -54,7 +54,12 @@ export async function apiCreateLink(link: {
   clientName: string;
   chainId: number;
 }): Promise<void> {
-  const res = await apiFetch('/links', { method: 'POST', body: JSON.stringify(link) });
+  const res = await apiFetch('/links', {
+    method: 'POST',
+    headers: authHeader(link.to),
+    body: JSON.stringify(link),
+  });
+  if (res.status === 401 || res.status === 403) throw new AuthRequiredError();
   if (!res.ok) throw new Error(`Failed to create link: ${res.status}`);
 }
 

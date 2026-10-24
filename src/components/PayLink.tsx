@@ -38,7 +38,13 @@ type LinkStatus =
   | { kind: 'pending' }                  // not yet paid — normal pay flow
   | { kind: 'paid'; link: ApiLink };     // already paid — show read-only state
 
-export default function PayLink({ params, onNavigate }: Props) {
+export default function PayLink({ params: urlParams, onNavigate }: Props) {
+  // The address bar can be edited by anyone, so the amount, recipient and description
+  // are replaced by the creator's saved values as soon as the server answers.
+  // The pay button stays disabled until then.
+  const [trustedParams, setTrustedParams] = useState<LinkParams | null>(null);
+  const [urlWasChanged, setUrlWasChanged] = useState(false);
+  const params: LinkParams = trustedParams ?? urlParams;
   const { address, isConnected, chainId } = useAccount();
   const { switchChain, isPending: isSwitching } = useSwitchChain();
   const isWrongChain = isConnected && chainId !== ARC_ACTIVE_CHAIN_ID;
@@ -54,14 +60,25 @@ export default function PayLink({ params, onNavigate }: Props) {
     apiGetCreator(params.to)
       .then((c) => { if (c.displayName) setCreatorName(c.displayName); })
       .catch(() => { /* backend unreachable — leave null */ });
-    // params.to is stable for the lifetime of this component
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [params.to]);
 
   // Load status once on mount — and expose a re-check function for pre-send guard
   async function checkLinkStatus(): Promise<'pending' | 'paid'> {
     try {
-      const link = await apiGetLink(params.linkId);
+      const link = await apiGetLink(urlParams.linkId);
+      if (link !== null) {
+        const changed =
+          Math.abs(parseFloat(link.amount) - parseFloat(urlParams.amount)) > 1e-9 ||
+          link.to.toLowerCase() !== urlParams.to.toLowerCase();
+        setTrustedParams({
+          amount: link.amount,
+          description: link.description,
+          to: link.to,
+          clientName: '',
+          linkId: urlParams.linkId,
+        });
+        setUrlWasChanged(changed);
+      }
       if (link === null) {
         // Link not in backend (e.g. created before backend existed) — allow payment
         setLinkStatus({ kind: 'pending' });
@@ -179,6 +196,7 @@ export default function PayLink({ params, onNavigate }: Props) {
         description: params.description,
         clientName: '',
         paidAt: Date.now(),
+        linkId: params.linkId,
       }, address);
     }
 
@@ -302,6 +320,15 @@ export default function PayLink({ params, onNavigate }: Props) {
           Testnet
         </span>
       </div>
+
+            {/* The address in the browser was edited — we show the creator's real values */}
+      {urlWasChanged && (
+        <div className="mb-4 flex gap-2 rounded-2xl p-3 text-sm"
+          style={{ background: '#fff7ed', border: '1px solid #fed7aa', color: '#c2410c' }}>
+          <AlertCircle size={16} className="mt-0.5 shrink-0" />
+          <span>This link's address was changed. Showing the amount and recipient the creator originally set.</span>
+        </div>
+      )}
 
       {/* Backend-unreachable warning */}
       {statusWarn && (
@@ -501,7 +528,7 @@ export default function PayLink({ params, onNavigate }: Props) {
                   <span style={{ color: 'var(--navy)', fontWeight: 600 }}>{arcChain.name}</span>
                 </Row>
                 <Row label="Network fee">
-                  <span style={{ color: '#16a34a', fontWeight: 600 }}>~$0.00 USDC</span>
+                  <span style={{ color: '#16a34a', fontWeight: 600 }}>Minimal · paid in USDC</span>
                 </Row>
                 {formattedBalance != null && (
                   <Row label="Your balance">

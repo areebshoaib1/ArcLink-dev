@@ -14,7 +14,8 @@
     "typecheck": "tsc --noEmit",
     "check": "bash scripts/check.sh",
     "contracts:build": "forge build",
-    "contracts:test": "forge test"
+    "contracts:test": "forge test",
+    "test:security": "bun run tests/security.ts"
   },
   "dependencies": {
     "@circle-fin/adapter-viem-v2": "^1.19.3",
@@ -40,7 +41,7 @@
     "viem": "^2.57.10",
     "wagmi": "^2.19.5"
   },
-    "overrides": {
+  "overrides": {
     "viem": "^2.57.10"
   },
   "devDependencies": {

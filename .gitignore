@@ -13,3 +13,11 @@ out
 cache
 *.wallet-backup
 *.before-*
+
+# Circle entity-secret recovery files — never commit
+.circle/
+.Circle/
+
+# Misc
+.DS_Store
+*.log

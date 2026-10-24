@@ -21,8 +21,8 @@ export interface SentPayment {
   description: string;
   clientName: string;   // recipient name / label
   paidAt: number;
+  linkId?: string;      // lets the receipt reload the saved link (missing on old entries)
 }
-
 // Data encoded directly in the pay link URL (no backend, works on any device)
 export interface LinkParams {
   amount: string;

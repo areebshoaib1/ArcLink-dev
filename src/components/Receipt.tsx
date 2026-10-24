@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Check } from 'lucide-react';
-import { useAccount, useTransaction } from 'wagmi';
+import { useAccount, useTransaction, useBlock } from 'wagmi';
 import { formatAddress, formatDate } from '../utils';
 import { buildTxExplorerUrl, requireChain } from '@/onchain-facts';
 import { ARC_ACTIVE_CHAIN_ID } from '../config';
@@ -36,8 +36,14 @@ export default function Receipt({ params, txHash, paidBy, onNavigate }: Props) {
   // can lose it); the recipient's display name comes from their profile.
   const [serverDescription, setServerDescription] = useState<string | null>(null);
   const [serverPaidAt, setServerPaidAt] = useState<number | null>(null);
-  // Show the real payment time once the saved record loads (not the moment this page was opened)
-  const timeMs = serverPaidAt ?? mountTime;
+  // The block's own timestamp is the true payment time (works even for old payments with no saved record)
+  const { data: blockData } = useBlock({
+    blockNumber: txData?.blockNumber,
+    chainId: ARC_ACTIVE_CHAIN_ID,
+    query: { enabled: txData?.blockNumber != null },
+  });
+  const chainTimeMs = blockData ? Number(blockData.timestamp) * 1000 : null;
+  const timeMs = chainTimeMs ?? serverPaidAt ?? mountTime;
   const [recipientName, setRecipientName] = useState<string | null>(null);
 
   useEffect(() => {

@@ -313,7 +313,26 @@ export default function Dashboard({ onNavigate }: Props) {
               </p>
             </div>
           ) : (
-            sent.map((s) => <SentRow key={s.txHash} payment={s} />)
+            sent.map((s) => (
+              <SentRow
+                key={s.txHash}
+                payment={s}
+                onReceipt={() =>
+                  onNavigate({
+                    name: 'receipt',
+                    params: {
+                      amount: s.amount,
+                      description: s.description,
+                      to: s.to,
+                      clientName: '',
+                      linkId: s.linkId ?? '',
+                    },
+                    txHash: s.txHash,
+                    paidBy: address ?? '',
+                  })
+                }
+              />
+            ))
           )
         )}
       </div>
@@ -384,7 +403,7 @@ function ReceivedRow({
   );
 }
 
-function SentRow({ payment }: { payment: SentPayment }) {
+function SentRow({ payment, onReceipt }: { payment: SentPayment; onReceipt: () => void }) {
   // Show the recipient's display name when they have set one, else their short address.
   const [recipientName, setRecipientName] = useState<string | null>(null);
   useEffect(() => {
@@ -395,7 +414,14 @@ function SentRow({ payment }: { payment: SentPayment }) {
     return () => { cancelled = true; };
   }, [payment.to]);
   return (
-    <div className="rounded-2xl p-4" style={{ background: '#fff', border: '1px solid var(--border)' }}>
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onReceipt}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onReceipt(); }}
+      className="cursor-pointer rounded-2xl p-4 transition-colors hover:bg-gray-50"
+      style={{ background: '#fff', border: '1px solid var(--border)' }}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
@@ -406,6 +432,9 @@ function SentRow({ payment }: { payment: SentPayment }) {
           </p>
           <p className="mt-0.5 text-xs" style={{ color: 'var(--text-muted)' }}>
             {formatDate(payment.paidAt)}
+          </p>
+          <p className="mt-1 text-xs font-semibold" style={{ color: 'var(--navy)' }}>
+            View receipt ›
           </p>
         </div>
         <div className="flex flex-col items-end gap-1.5 shrink-0">

@@ -1,6 +1,6 @@
 # ArcLink
 
-**Instant USDC payment links built on Arc.**
+ArcLink is an independent hackathon project. It is not affiliated with or endorsed by Circle or Arc.
 
 ArcLink makes it easy to create and share payment links for seamless USDC payments on the Arc blockchain.
 

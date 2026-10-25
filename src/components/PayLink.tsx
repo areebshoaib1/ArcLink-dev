@@ -313,7 +313,7 @@ export default function PayLink({ params: urlParams, onNavigate }: Props) {
       {/* Trust header */}
       <div className="pt-10 pb-4 text-center">
         <p className="text-sm font-semibold" style={{ color: 'var(--navy)' }}>
-          Secure payment · Powered by Arc
+          Secure USDC payment
         </p>
         <span className="mt-1 inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold"
           style={{ background: '#fef9c3', color: '#854d0e' }}>
@@ -482,11 +482,14 @@ export default function PayLink({ params: urlParams, onNavigate }: Props) {
           </p>
         )}
         <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-          Powered by <span className="font-semibold" style={{ color: 'var(--navy)' }}>USDC</span>
+          Paid in <span className="font-semibold" style={{ color: 'var(--navy)' }}>USDC</span>
           {' '}on <span className="font-semibold" style={{ color: 'var(--navy)' }}>{ACTIVE_CHAIN_NAME}</span>
         </p>
         <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-          Supports MetaMask, OKX Wallet, Coinbase Wallet, and other Arc-compatible wallets
+          Supports MetaMask, OKX Wallet, Coinbase Wallet, and other compatible wallets
+        </p>
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+          ArcLink is an independent project, not affiliated with or endorsed by Circle or Arc.
         </p>
       </div>
 

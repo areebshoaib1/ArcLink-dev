@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Zap, Globe, DollarSign } from 'lucide-react';
+import { Zap, Globe, DollarSign, Info } from 'lucide-react';
 import { ConnectKitButton } from 'connectkit';
 import { useAccount } from 'wagmi';
 import { ArcLogoMark } from './ArcLogo';
@@ -72,10 +72,9 @@ export default function Landing({ onNavigate }: Props) {
           className="mt-3 rounded-full px-4 py-1.5 text-sm"
           style={{ background: '#eef3fc', color: 'var(--text-secondary)' }}
         >
-          Built on{' '}
+          USDC payment links on the{' '}
           <span style={{ color: 'var(--navy)', fontWeight: 600 }}>Arc</span>
-          {' · '}Powered by{' '}
-          <span style={{ color: 'var(--navy)', fontWeight: 600 }}>USDC</span>
+          {' '}network
         </div>
       </div>
 
@@ -153,6 +152,18 @@ export default function Landing({ onNavigate }: Props) {
                 ? 'Wallet connected and signed in.'
                 : 'Wallet connected. You will be asked to sign a free message to continue.'
               : 'Connect your wallet to create payment links and access your dashboard.')}
+        </p>
+      </div>
+
+            {/* Independence notice — highlighted and centred, just under the buttons */}
+      <div
+        className="mx-auto mb-6 mt-6 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-center"
+        style={{ background: '#f0fdfa', border: '1px solid #99f6e4', color: '#0f766e' }}
+        role="note"
+      >
+        <Info className="size-4 shrink-0" aria-hidden="true" />
+        <p className="text-sm font-semibold leading-snug">
+          ArcLink is an independent project. It is not affiliated with or endorsed by Circle or Arc.
         </p>
       </div>
 

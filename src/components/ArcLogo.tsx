@@ -1,16 +1,16 @@
 /**
  * ArcLink logo: an original mark made for this project — two interlocking
- * chain links on a teal rounded square. It is deliberately NOT based on any
- * other company's logo.
+ * chain links in white on an indigo-to-cyan rounded square. It is
+ * deliberately NOT based on any other company's logo and contains no text.
  *
  * (The file and component names are kept as they were so every screen that
  * imports ArcLogoMark / ArcLogoSmall keeps working.)
  */
 
-const TILE = '#0f766e'; // teal
-const RADIUS = 0.2;     // corner radius as a fraction of the tile size
+const TILE_BG = 'linear-gradient(135deg, #4f46e5 0%, #06b6d4 100%)';
+const RADIUS = 0.234; // corner radius as a fraction of the tile size (15/64)
 
-/** Two rounded links, drawn in a 64x64 box, rotated so the chain runs diagonally. */
+/** Two interlocking rounded links, drawn in a 64x64 box along the diagonal. */
 function ChainGlyph({ size }: { size: number }) {
   return (
     <svg
@@ -20,15 +20,9 @@ function ChainGlyph({ size }: { size: number }) {
       fill="none"
       aria-hidden="true"
     >
-      <g
-        transform="rotate(-45 32 32)"
-        stroke="white"
-        strokeWidth="6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <rect x="6" y="23" width="30" height="18" rx="9" />
-        <rect x="28" y="23" width="30" height="18" rx="9" />
+      <g stroke="white" strokeWidth="4.5" strokeLinecap="round">
+        <rect x="13.6" y="32.9" width="24" height="11" rx="5.5" transform="rotate(-45 25.6 38.4)" />
+        <rect x="26.4" y="20.1" width="24" height="11" rx="5.5" transform="rotate(-45 38.4 25.6)" />
       </g>
     </svg>
   );
@@ -41,14 +35,14 @@ function LogoTile({ size }: { size: number }) {
         width: size,
         height: size,
         borderRadius: Math.round(size * RADIUS),
-        background: TILE,
+        background: TILE_BG,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         flexShrink: 0,
       }}
     >
-      <ChainGlyph size={Math.round(size * 0.72)} />
+      <ChainGlyph size={size} />
     </div>
   );
 }

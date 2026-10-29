@@ -15,7 +15,8 @@
     "check": "bash scripts/check.sh",
     "contracts:build": "forge build",
     "contracts:test": "forge test",
-    "test:security": "bun run tests/security.ts"
+    "test:security": "bun run tests/security.ts",
+    "live": "concurrently -n server,web,tunnel \"bun run server\" \"npx vite preview --port 5173 --host\" \"cloudflared tunnel run arclink\""
   },
   "dependencies": {
     "@circle-fin/adapter-viem-v2": "^1.19.3",
@@ -50,6 +51,7 @@
     "@types/react-dom": "^18.3.7",
     "@vitejs/plugin-react": "^4.7.0",
     "autoprefixer": "^10.6.1",
+    "concurrently": "^10.0.6",
     "oxlint": "^1.89.0",
     "oxlint-tsgolint": "^7.0.2005",
     "postcss": "^8.5.31",

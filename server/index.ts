@@ -6,14 +6,14 @@
  *   POST /links              — create a payment link record
  *   GET  /links/:id          — fetch a single link
  *   GET  /links/by/:addr     — fetch all links for a recipient wallet
+ *                              PRIVATE: needs X-ArcLink-Auth signed by that same wallet (401 otherwise)
+ *   GET  /creators/:addr     — public display name of a wallet (payers see this)
+ *   PUT  /creators/:addr     — set display name; needs X-ArcLink-Auth signed by that same wallet
  *   POST /links/:id/paid     — server-side on-chain verify then mark paid
  *                              200: first verified payment wins
  *                              400: on-chain check failed (receipt, revert, timestamp, amount)
  *                              409: link already paid OR txHash used on another link
  *   GET  /health             — liveness probe
-  *                              PRIVATE: needs X-ArcLink-Auth signed by that same wallet (401 otherwise)
- *   GET  /creators/:addr     — public display name of a wallet (payers see this)
- *   PUT  /creators/:addr     — set display name; needs X-ArcLink-Auth signed by that same wallet
  */
 
 import { serve } from 'bun';
@@ -38,18 +38,19 @@ function err(msg: string, status = 400): Response {
 
 // ── DB row type ───────────────────────────────────────────────────────────────
 interface DbRow {
-  id: string;
-  chain_id: number;
-  to_addr: string;
-  amount: string;
+  id:          string;
+  chain_id:    number;
+  to_addr:     string;
+  amount:      string;
   description: string;
   client_name: string;
-  created_at: number;
-  tx_hash: string | null;
-  paid_by: string | null;
-  paid_at: number | null;
-  verified: number;
+  created_at:  number;
+  tx_hash:     string | null;
+  paid_by:     string | null;
+  paid_at:     number | null;
+  verified:    number;
 }
+
 /** What a PAYER (or anyone without the creator's sign-in) may see: the creator's private client label is blanked. */
 function publicLink(row: DbRow) {
   return { ...dbRowToLink(row), clientName: '' };
@@ -57,17 +58,17 @@ function publicLink(row: DbRow) {
 
 function dbRowToLink(row: DbRow) {
   return {
-    id: row.id,
-    chainId: row.chain_id,
-    to: row.to_addr,
-    amount: row.amount,
+    id:          row.id,
+    chainId:     row.chain_id,
+    to:          row.to_addr,
+    amount:      row.amount,
     description: row.description,
-    clientName: row.client_name,
-    createdAt: row.created_at,
-    txHash: row.tx_hash ?? undefined,
-    paidBy: row.paid_by ?? undefined,
-    paidAt: row.paid_at ?? undefined,
-    verified: row.verified === 1,
+    clientName:  row.client_name,
+    createdAt:   row.created_at,
+    txHash:      row.tx_hash  ?? undefined,
+    paidBy:      row.paid_by  ?? undefined,
+    paidAt:      row.paid_at  ?? undefined,
+    verified:    row.verified === 1,
   };
 }
 
@@ -75,20 +76,19 @@ function dbRowToLink(row: DbRow) {
 serve({
   port: PORT,
   async fetch(req, server) {
-    const url = new URL(req.url);
+    const url  = new URL(req.url);
     const path = url.pathname;
 
     if (req.method === 'OPTIONS') {
       return new Response(null, {
         status: 204,
         headers: {
-          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Origin':  '*',
           'Access-Control-Allow-Methods': 'GET,POST,PUT,OPTIONS',
           'Access-Control-Allow-Headers': 'Content-Type, X-ArcLink-Auth',
         },
       });
     }
-
 
     // ── Rate limit (per visitor address, per kind of request) ─────────────────
     {
@@ -134,20 +134,20 @@ serve({
       const resolvedChainId = typeof chainId === 'number' ? chainId : ACTIVE_CHAIN_ID;
 
       stmts.insertLink.run({
-        $id: id,
-        $chain_id: resolvedChainId,
-        $to_addr: to.toLowerCase(),
-        $amount: amount,
+        $id:          id,
+        $chain_id:    resolvedChainId,
+        $to_addr:     to.toLowerCase(),
+        $amount:      amount,
         $description: (typeof description === 'string' ? description : '').slice(0, 200),
-        $client_name: (typeof clientName === 'string' ? clientName : '').slice(0, 100),
-        $created_at: Date.now(),
+        $client_name: (typeof clientName  === 'string' ? clientName  : '').slice(0, 100),
+        $created_at:  Date.now(),
       });
       return json({ ok: true });
     }
 
     // Route helpers — order matters: /links/by/:addr BEFORE /links/:id
     const byAddrMatch = path.match(/^\/links\/by\/([^/]+)$/);
-    const paidMatch = path.match(/^\/links\/([^/]+)\/paid$/);
+    const paidMatch   = path.match(/^\/links\/([^/]+)\/paid$/);
     const singleMatch = path.match(/^\/links\/([^/]+)$/);
 
     // ── GET /links/by/:addr ───────────────────────────────────────────────────
@@ -180,15 +180,15 @@ serve({
       // 2. Already paid — record duplicate, return 409
       if (link.verified === 1) {
         stmts.recordDuplicate.run({
-          $link_id: id,
-          $tx_hash: txHash,
-          $paid_by: 'unknown',
+          $link_id:     id,
+          $tx_hash:     txHash,
+          $paid_by:     'unknown',
           $recorded_at: Date.now(),
         });
         return json(
           {
-            error: 'already_paid',
-            message: 'This link has already been paid. Duplicate attempt recorded.',
+            error:    'already_paid',
+            message:  'This link has already been paid. Duplicate attempt recorded.',
             original: publicLink(link),
           },
           409,
@@ -199,10 +199,8 @@ serve({
       const existingByHash = stmts.getLinkByTxHash.get({ $tx_hash: txHash }) as DbRow | undefined;
       if (existingByHash) {
         return json(
-          {
-            error: 'tx_hash_already_used',
-            message: 'This transaction has already been used to verify a different payment link.'
-          },
+          { error: 'tx_hash_already_used',
+            message: 'This transaction has already been used to verify a different payment link.' },
           409,
         );
       }
@@ -217,6 +215,7 @@ serve({
           link.to_addr,
           link.amount,
           link.created_at,  // block timestamp must be after this
+          link.id,          // part of the ArcLinkPay record key
         );
       } catch (e) {
         console.error('[verify] unexpected error:', e);
@@ -231,7 +230,7 @@ serve({
       //    paidBy is from the Transfer log, not the browser.
       try {
         stmts.markPaid.run({
-          $id: id,
+          $id:      id,
           $tx_hash: txHash,
           $paid_by: result.paidBy,
           $paid_at: Date.now(),
@@ -242,8 +241,8 @@ serve({
           const winner = stmts.getLink.get({ $id: id }) as DbRow | undefined;
           return json(
             {
-              error: 'already_paid',
-              message: 'A concurrent payment was recorded first.',
+              error:    'already_paid',
+              message:  'A concurrent payment was recorded first.',
               original: winner ? publicLink(winner) : undefined,
             },
             409,
@@ -258,7 +257,7 @@ serve({
 
     // ── GET /links/:id ────────────────────────────────────────────────────────
     if (req.method === 'GET' && singleMatch) {
-      const id = decodeURIComponent(singleMatch[1]);
+      const id  = decodeURIComponent(singleMatch[1]);
       const row = stmts.getLink.get({ $id: id }) as DbRow | undefined;
       if (!row) return err('not found', 404);
       return json(publicLink(row));
@@ -297,6 +296,7 @@ serve({
       stmts.upsertCreator.run({ $addr: addr, $display_name: name, $updated_at: Date.now() });
       return json({ addr, displayName: name });
     }
+
     // ── Health ────────────────────────────────────────────────────────────────
     if (path === '/health') return json({ ok: true });
 

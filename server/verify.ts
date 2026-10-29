@@ -17,6 +17,8 @@
 
 import { createPublicClient, http, parseAbiItem, decodeEventLog } from 'viem';
 import { resolveChainFacts } from './chain-facts';
+import { arcLinkPayFor } from '../src/contract';
+import { checkContractPayment } from './contract-check';
 
 // Transfer(address indexed from, address indexed to, uint256 value)
 const TRANSFER_EVENT = parseAbiItem(
@@ -98,6 +100,7 @@ async function fetchReceiptWithRetry(chainId: number, txHash: `0x${string}`) {
  * @param amountStr   The link's amount from the DB e.g. "5.00" (trusted).
  * @param createdAtMs The link's created_at timestamp in milliseconds (trusted, from DB).
  *                    The block containing the tx must have a timestamp AFTER this.
+ * @param linkId      The link's id from the DB (part of the ArcLinkPay record key).
  */
 export async function verifyPayment(
   txHash:      string,
@@ -105,6 +108,7 @@ export async function verifyPayment(
   toAddr:      string,
   amountStr:   string,
   createdAtMs: number,
+  linkId:      string,
 ): Promise<VerifyResult> {
 
   // 1. Hash format guard
@@ -166,6 +170,21 @@ export async function verifyPayment(
       ok: false,
       reason: `Link has an unparseable amount in the database: ${String(e)}`,
     };
+  }
+
+  // 5b. If ArcLinkPay is deployed on this chain, the payment MUST have gone
+  //     through it: a LinkPaid event for exactly this link, recipient and amount.
+  const payContract = arcLinkPayFor(chainId);
+  if (payContract) {
+    const r = checkContractPayment({
+      logs:      receipt.logs,
+      contract:  payContract,
+      usdc:      facts.usdcAddress,
+      linkId,
+      recipient: toAddr,
+      amountRaw: expectedRaw,
+    });
+    return r.ok ? { ok: true, paidBy: r.paidBy } : { ok: false, reason: r.reason };
   }
 
   const recipientLower = toAddr.toLowerCase();

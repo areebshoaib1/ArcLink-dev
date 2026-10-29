@@ -106,8 +106,8 @@ export default function PayLink({ params: urlParams, onNavigate }: Props) {
 
   useEffect(() => {
     void checkLinkStatus();
-  // Only run on mount — params.linkId is stable for the lifetime of this component
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Only run on mount — params.linkId is stable for the lifetime of this component
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── Payment state ─────────────────────────────────────────────────────────
@@ -220,7 +220,7 @@ export default function PayLink({ params: urlParams, onNavigate }: Props) {
         // Backend error: local cache still updated below
       });
 
-    markLinkPaid(params.linkId, hash, address);
+    markLinkPaid(params.linkId, hash, address, params.to);
     if (saveHistory) {
       addSentPayment({
         txHash: hash,
@@ -233,7 +233,7 @@ export default function PayLink({ params: urlParams, onNavigate }: Props) {
       }, address);
     }
     onNavigate({ name: 'receipt', params, txHash: hash, paidBy: address });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [receiptArrived, receipt]);
 
   const arcChain = requireChain(ARC_ACTIVE_CHAIN_ID);
@@ -381,7 +381,7 @@ export default function PayLink({ params: urlParams, onNavigate }: Props) {
 
   // ── Loading state (checking status on mount) ──────────────────────────────
   const statusLoading = linkStatus.kind === 'loading';
-  const statusWarn    = linkStatus.kind === 'unknown' ? linkStatus.warn : null;
+  const statusWarn = linkStatus.kind === 'unknown' ? linkStatus.warn : null;
 
   // ── Normal pay flow ───────────────────────────────────────────────────────
   return (
@@ -490,8 +490,8 @@ export default function PayLink({ params: urlParams, onNavigate }: Props) {
           <p className="text-center text-xs" style={{ color: 'var(--text-muted)' }}>
             {formattedBalance != null
               ? <>Balance: <span className="font-semibold"
-                  style={{ color: insufficientBalance ? '#c2410c' : 'var(--text-secondary)' }}>
-                  {formattedBalance} USDC</span></>
+                style={{ color: insufficientBalance ? '#c2410c' : 'var(--text-secondary)' }}>
+                {formattedBalance} USDC</span></>
               : 'Checking balance…'}
           </p>
         )}
@@ -535,12 +535,12 @@ export default function PayLink({ params: urlParams, onNavigate }: Props) {
             {statusLoading
               ? 'Checking status…'
               : approving
-              ? 'Approve USDC in wallet… (1 of 2)'
-              : isPending
-              ? 'Confirm in wallet…'
-              : isConfirming
-              ? 'Confirming…'
-              : `Pay $${params.amount} USDC`}
+                ? 'Approve USDC in wallet… (1 of 2)'
+                : isPending
+                  ? 'Confirm in wallet…'
+                  : isConfirming
+                    ? 'Confirming…'
+                    : `Pay $${params.amount} USDC`}
           </button>
         )}
       </div>

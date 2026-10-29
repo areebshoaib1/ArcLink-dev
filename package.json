@@ -16,7 +16,7 @@
     "contracts:build": "forge build",
     "contracts:test": "forge test",
     "test:security": "bun run tests/security.ts",
-    "live": "concurrently -n server,web,tunnel \"bun run server\" \"npx vite preview --port 5173 --host\" \"cloudflared tunnel run arclink\""
+    "live": "concurrently -n server,web,tunnel \"bun run server\" \"npx vite preview --port 5173 --host\" \"cloudflared tunnel --protocol http2 run arclink\""
   },
   "dependencies": {
     "@circle-fin/adapter-viem-v2": "^1.19.3",

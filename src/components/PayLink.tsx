@@ -39,7 +39,13 @@ type LinkStatus =
   | { kind: 'loading' }                  // fetching from backend on mount
   | { kind: 'unknown'; warn: string }    // backend unreachable — show warning
   | { kind: 'pending' }                  // not yet paid — normal pay flow
-  | { kind: 'paid'; link: ApiLink };     // already paid — show read-only state
+  | { kind: 'paid'; link: ApiLink }      // already paid — show read-only state
+  | { kind: 'otherNetwork'; chainId: number }; // link belongs to a different network than the app is running on
+
+/** Network name for a chain id, without throwing for unknown ids. */
+function chainNameFor(chainId: number): string {
+  try { return requireChain(chainId).name; } catch { return `chain ${chainId}`; }
+}
 
 export default function PayLink({ params: urlParams, onNavigate }: Props) {
   // The address bar can be edited by anyone, so the amount, recipient and description
@@ -67,7 +73,7 @@ export default function PayLink({ params: urlParams, onNavigate }: Props) {
   }, [params.to]);
 
   // Load status once on mount — and expose a re-check function for pre-send guard
-  async function checkLinkStatus(): Promise<'pending' | 'paid'> {
+  async function checkLinkStatus(): Promise<'pending' | 'paid' | 'blocked'> {
     try {
       const link = await apiGetLink(urlParams.linkId);
       if (link !== null) {
@@ -91,6 +97,12 @@ export default function PayLink({ params: urlParams, onNavigate }: Props) {
       if (link.verified) {
         setLinkStatus({ kind: 'paid', link });
         return 'paid';
+      }
+      // A link made on another network (e.g. a testnet link while the app runs on mainnet)
+      // must never be paid here: the money would move on the wrong network.
+      if (link.chainId !== ARC_ACTIVE_CHAIN_ID) {
+        setLinkStatus({ kind: 'otherNetwork', chainId: link.chainId });
+        return 'blocked';
       }
       setLinkStatus({ kind: 'pending' });
       return 'pending';
@@ -254,7 +266,7 @@ export default function PayLink({ params: urlParams, onNavigate }: Props) {
 
     // Re-check status right before sending — catches concurrent payments
     const currentStatus = await checkLinkStatus();
-    if (currentStatus === 'paid') return; // UI updated by checkLinkStatus
+    if (currentStatus !== 'pending') return; // paid or blocked: UI updated by checkLinkStatus
 
     reset();
     let parsed: bigint;
@@ -320,10 +332,30 @@ export default function PayLink({ params: urlParams, onNavigate }: Props) {
     void sendTransaction();
   }
 
+  // ── Link belongs to another network ─────────────────────────────────────────
+  if (linkStatus.kind === 'otherNetwork') {
+    return (
+      <div className="mobile-frame flex flex-col items-center" style={{ paddingLeft: 'var(--px)', paddingRight: 'var(--px)' }}>
+        <div className="pt-14 pb-6 text-center">
+          <div className="mx-auto flex size-16 items-center justify-center rounded-full" style={{ background: '#fef3c7' }}>
+            <AlertCircle size={36} style={{ color: '#d97706' }} strokeWidth={2} />
+          </div>
+          <h1 className="mt-5 text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>
+            Link from another network
+          </h1>
+          <p className="mt-1.5 text-sm" style={{ color: 'var(--text-secondary)' }}>
+            This link was created on {chainNameFor(linkStatus.chainId)}, but ArcLink is now running on{' '}
+            {ACTIVE_CHAIN_NAME}. It can't be paid here. Please ask the sender for a new link.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   // ── Already-Paid state ────────────────────────────────────────────────────
   if (linkStatus.kind === 'paid') {
     const paid = linkStatus.link;
-    const txUrl = paid.txHash ? buildTxExplorerUrl(ARC_ACTIVE_CHAIN_ID, paid.txHash) : undefined;
+    const txUrl = paid.txHash ? buildTxExplorerUrl(paid.chainId, paid.txHash) : undefined;
     return (
       <div className="mobile-frame flex flex-col items-center" style={{ paddingLeft: 'var(--px)', paddingRight: 'var(--px)' }}>
         <div className="pt-14 pb-6 text-center">
@@ -357,7 +389,7 @@ export default function PayLink({ params: urlParams, onNavigate }: Props) {
               <span className="mono">{paid.txHash.slice(0, 6)}…{paid.txHash.slice(-4)}</span>
             </Row>
           )}
-          <Row label="Network">{arcChain.name}</Row>
+          <Row label="Network">{chainNameFor(paid.chainId)}</Row>
         </div>
 
         {txUrl && (
@@ -392,8 +424,10 @@ export default function PayLink({ params: urlParams, onNavigate }: Props) {
           Secure USDC payment
         </p>
         <span className="mt-1 inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold"
-          style={{ background: '#fef9c3', color: '#854d0e' }}>
-          Testnet
+          style={arcChain.isTestnet
+            ? { background: '#fef9c3', color: '#854d0e' }
+            : { background: '#dcfce7', color: '#166534' }}>
+          {arcChain.isTestnet ? 'Testnet' : 'Arc mainnet'}
         </span>
       </div>
 

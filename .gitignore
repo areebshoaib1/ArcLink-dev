@@ -14,6 +14,10 @@ cache
 *.wallet-backup
 *.before-*
 
+*.db
+arclink.db*
+arc-forge
+
 # Circle entity-secret recovery files — never commit
 .circle/
 .Circle/

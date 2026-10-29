@@ -20,8 +20,8 @@ import { ARC_MAINNET_CHAIN_ID, ARC_TESTNET_CHAIN_ID } from './network';
 const ADDRESSES: Record<number, string | undefined> = {
   // Arc Testnet — deployed from Arc Studio on Oct 29, 2026
   [ARC_TESTNET_CHAIN_ID]: '0x79c35c69390454155b5e6127c17839433f5c267a',
-  // Arc mainnet — fill in after the mainnet deployment
-  [ARC_MAINNET_CHAIN_ID]: undefined,
+  // Arc mainnet — deployed Oct 30, 2026 (deploy tx 0xdca1f06ae3b8d5d2d8304dca229ce47a742a936217cb60e7fa276ae68221bf91)
+  [ARC_MAINNET_CHAIN_ID]: '0x4e576747FE8846D6F49600c41d5aA2f5aFd5E6EE',
 };
 
 /** The ArcLinkPay address on a chain, or undefined when none is deployed there. */

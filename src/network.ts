@@ -12,5 +12,5 @@ export const ARC_TESTNET_CHAIN_ID = 5042002;
 export const ARC_MAINNET_CHAIN_ID = 5042;
 
 // ▼▼▼  Switch here to go to mainnet  ▼▼▼
-export const ARC_ACTIVE_CHAIN_ID: number = ARC_TESTNET_CHAIN_ID;
+export const ARC_ACTIVE_CHAIN_ID: number = ARC_MAINNET_CHAIN_ID;
 // ▲▲▲  Change to ARC_MAINNET_CHAIN_ID for production  ▲▲▲

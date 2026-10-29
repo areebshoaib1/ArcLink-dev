@@ -41,7 +41,7 @@ Built with Arc Studio: <ADD YOUR ARC STUDIO PROJECT LINK HERE>
 
 ## How this project was built
 
-The contract and its tests were written and tested in Arc Studio, which also produced the Arc Testnet deployment. The Arc mainnet deployment was run with `arc-forge`, using the command Arc Studio provided. The frontend and server started from Arc Studio output and were extended by the author with AI assistance (Claude).
+The contract and its tests were written and tested in Arc Studio, which also produced the Arc Testnet deployment. The Arc mainnet deployment was run with `arc-forge`, using the command Arc Studio provided. The frontend and server started from Arc Studio output and were extended by the author.
 
 ## Getting started
 

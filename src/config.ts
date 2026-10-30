@@ -14,8 +14,13 @@
  */
 
 import { http, createConfig } from 'wagmi';
-import { mainnet } from 'wagmi/chains';
-import { arcTestnet } from 'viem/chains';
+
+// mainnet and arcTestnet removed - app is Arc Mainnet only
+// {
+// import { mainnet } from 'wagmi/chains';
+// import { arcTestnet } from 'viem/chains';
+// }
+
 import { injected } from 'wagmi/connectors';
 import { registerChain } from './tracing';
 import { requireChain, getUsdc } from '@/onchain-facts';
@@ -67,14 +72,14 @@ const arcMainnetChain = {
 
 // ── wagmi config ──────────────────────────────────────────────────────────────
 export const config = createConfig({
-  chains: [arcTestnet, arcMainnetChain, mainnet],
+  chains: [arcMainnetChain],
+
   connectors: [
-  injected({ target: 'metaMask', shimDisconnect: true }),
-  injected({ target: 'okxWallet', shimDisconnect: true }),
-],
+    injected({ shimDisconnect: true }),
+  ],
+
   transports: {
-    [ARC_TESTNET_ID]: http(arcTestnetFact.rpcUrls[0]),
     [ARC_MAINNET_ID]: http(arcMainnetFact.rpcUrls[0]),
-    [mainnet.id]: http(),
   },
+
 });
